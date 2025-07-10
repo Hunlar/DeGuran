@@ -1,0 +1,17 @@
+{
+  "name": "kuran-api-bot",
+  "description": "Tüm gruplara her saat başı API'den Kur’an ayeti gönderen Telegram botu.",
+  "repository": "https://github.com/Hunlar/DeGuran",
+  "keywords": ["telegram", "bot", "quran", "kuran", "heroku"],
+  "env": {
+    "TELEGRAM_TOKEN": {
+      "description": "BotFather’dan aldığın Telegram Bot Token",
+      "required": true
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ]
+}
