@@ -2,7 +2,8 @@ import os
 import json
 import random
 import requests
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.constants import ParseMode
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 TOKEN = os.getenv("TOKEN")
@@ -13,7 +14,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("ZEYD BİN SABR", url="https://t.me/zeydbinhalit")]
     ]
     await update.message.reply_photo(
-        photo="https://i.imgur.com/3VJNx7B.jpg",  # Ayasofya görseli düzgün çalışıyor
+        photo="https://i.imgur.com/3VJNx7B.jpg",  # Ayasofya görseli
         caption=(
             "Bu bot, hayatın yoğun temposunda Kur’an-ı Kerim’i ve İslam’ı hatırlatmak için yapılmıştır."
         ),
@@ -40,11 +41,12 @@ async def ara(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Kullanım: /ara {sure adı} [ayet no (isteğe bağlı)]")
         return
 
+    sureler = requests.get("https://api.acikkuran.com/v2/sureler").json()["data"]
+
     if len(args) >= 2 and args[1].isdigit():
         sure_adi = args[0].lower()
         ayet_no = int(args[1])
-        sureler = requests.get("https://api.acikkuran.com/v2/sureler").json()
-        for s in sureler["data"]:
+        for s in sureler:
             if sure_adi in [s["adi"].lower(), s["adi_latin"].lower()]:
                 sure_id = s["id"]
                 mesaj = get_meal(sure_id, ayet_no)
@@ -54,8 +56,7 @@ async def ara(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     sure_adi = " ".join(args).lower()
-    sureler = requests.get("https://api.acikkuran.com/v2/sureler").json()
-    for s in sureler["data"]:
+    for s in sureler:
         if sure_adi in [s["adi"].lower(), s["adi_latin"].lower()]:
             sure_id = s["id"]
             response = requests.get(f"https://api.acikkuran.com/v2/ayetler?sure_id={sure_id}&limit=3").json()
