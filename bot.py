@@ -1,150 +1,146 @@
-import json
 import os
 import random
 import requests
-import schedule
-import time
-import threading
 from telegram import (
-    Update, InlineKeyboardMarkup, InlineKeyboardButton, Bot
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup
 )
 from telegram.ext import (
-    Application, CommandHandler, MessageHandler, ContextTypes, filters
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    CallbackQueryHandler,
 )
 
-TOKEN = os.environ.get("TELEGRAM_TOKEN")
-GROUPS_FILE = "groups.json"
+TOKEN = os.getenv("TOKEN")  # Heroku'ya TOKEN olarak eklendiğini varsayıyoruz
 
-bot = Bot(token=TOKEN)
+# /start komutu
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    photo_url = "https://upload.wikimedia.org/wikipedia/commons/6/6d/Ayasofya2020.jpg"
 
-def save_group(chat_id):
+    keyboard = [
+        [InlineKeyboardButton("📌 Destek Grubu", url="https://t.me/Kizilsancaktr")],
+        [InlineKeyboardButton("📖 ZEYD BİN SABR", url="https://t.me/zeydbinhalit")]
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     try:
-        with open(GROUPS_FILE, "r", encoding="utf-8") as f:
-            groups = json.load(f)
-    except FileNotFoundError:
-        groups = []
+        await update.message.reply_photo(
+            photo=photo_url,
+            caption=(
+                "📖 *Kur'an-ı Kerim Botu*\n\n"
+                "Bu bot, hayatın yoğun temposunda sana Kur’an’ı ve İslam’ı hatırlatmak için hazırlandı.\n"
+                "Her saat başı rastgele ayet gönderir. Komutları kullanarak da erişim sağlayabilirsin."
+            ),
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        await update.message.reply_text("Görsel gönderilemedi. Bot çalışıyor.\n" + str(e))
 
-    if chat_id not in groups:
-        groups.append(chat_id)
-        with open(GROUPS_FILE, "w", encoding="utf-8") as f:
-            json.dump(groups, f, ensure_ascii=False)
-
+# /ayet komutu
 def get_random_ayah():
     ayah_number = random.randint(1, 6236)
+
     arabic_url = f"https://api.alquran.cloud/v1/ayah/{ayah_number}"
     turkish_url = f"https://api.alquran.cloud/v1/ayah/{ayah_number}/tr.duz"
 
-    arabic_response = requests.get(arabic_url).json()
-    turkish_response = requests.get(turkish_url).json()
-
-    if arabic_response["status"] == "OK" and turkish_response["status"] == "OK":
-        surah = arabic_response["data"]["surah"]["name"]
-        num = arabic_response["data"]["numberInSurah"]
-        arabic = arabic_response["data"]["text"]
-        turkish = turkish_response["data"]["text"]
-        return f"📖 *{surah} Suresi {num}. Ayet*\n\n🔹 _{arabic}_\n\n💬 {turkish}"
-    return "⚠️ Ayet alınamadı."
-
-def send_to_all_groups():
     try:
-        with open(GROUPS_FILE, "r", encoding="utf-8") as f:
-            groups = json.load(f)
-    except FileNotFoundError:
-        groups = []
+        arabic_response = requests.get(arabic_url).json()
+        turkish_response = requests.get(turkish_url).json()
 
-    message = get_random_ayah()
-    for chat_id in groups:
-        try:
-            bot.send_message(chat_id=chat_id, text=message, parse_mode="Markdown")
-        except Exception as e:
-            print(f"⚠️ Hata: {e} - {chat_id}")
+        if arabic_response["status"] == "OK" and turkish_response["status"] == "OK":
+            surah = arabic_response["data"]["surah"]["name"]
+            num = arabic_response["data"]["numberInSurah"]
+            arabic = arabic_response["data"]["text"]
+            turkish = turkish_response["data"].get("text", "❗Türkçe meal bulunamadı.")
 
-def start_scheduler():
-    schedule.every().hour.at(":00").do(send_to_all_groups)
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    ayasofya_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Hagia_Sophia_Mars_2020_img1.jpg/640px-Hagia_Sophia_Mars_2020_img1.jpg"
-    keyboard = [
-        [InlineKeyboardButton("Destek Grubu", url="https://t.me/Kizilsancaktr")],
-        [InlineKeyboardButton("ZEYD BİN SABR", url="https://t.me/zeydbinhalit")]
-    ]
-    caption = (
-        "🕌 Bu bot, hayatın yoğun temposunda Kur’an’ı Kerim’i ve İslamiyet’i hatırlatmak "
-        "ve yaymak amacıyla yapılmıştır."
-    )
-    await update.message.reply_photo(
-        photo=ayasofya_url,
-        caption=caption,
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+            return (
+                f"📖 *{surah} Suresi {num}. Ayet*\n\n"
+                f"🔹 _{arabic}_\n\n"
+                f"💬 {turkish}"
+            )
+        else:
+            return "⚠️ Ayet verisi alınamadı."
+    except Exception as e:
+        print("Ayet alma hatası:", e)
+        return "⚠️ Ayet çekilirken hata oluştu."
 
 async def ayet(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    message = get_random_ayah()
-    await update.message.reply_text(message, parse_mode="Markdown")
+    mesaj = get_random_ayah()
+    await update.message.reply_text(mesaj, parse_mode="Markdown")
 
-async def ara(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if len(context.args) == 0:
-        await update.message.reply_text("🔎 Kullanım: /ara kelime")
-        return
-
-    query = " ".join(context.args)
-    url = f"https://api.alquran.cloud/v1/search/{query}/all/tr.duz"
-    response = requests.get(url).json()
-
-    if response["status"] != "OK" or response["data"]["count"] == 0:
-        await update.message.reply_text("❌ Uygun sonuç bulunamadı.")
-        return
-
-    results = response["data"]["matches"][:3]
-    reply = f"🔍 *{query}* için bulunan ayetler:\n\n"
-    for match in results:
-        surah = match["surah"]["name"]
-        num = match["numberInSurah"]
-        text = match["text"]
-        reply += f"*{surah}* - {num}. Ayet\n💬 {text}\n\n"
-
-    await update.message.reply_text(reply.strip(), parse_mode="Markdown")
-
-# ✅ Ali Hadis API'den rastgele hadis
+# /hadis komutu
 async def hadis(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        kaynak = "abu-dawud"
-        max_num = 500
-        num = random.randint(1, max_num)
+        kaynak = "muslim"
+        url = f"https://api.sutanlab.id/hadith/{kaynak}"
 
-        url = f"https://api.sutanlab.id/hadith/{kaynak}/{num}"
-        response = requests.get(url).json()
+        response = requests.get(url)
+        data = response.json()
 
-        if response["status"] != "OK":
-            await update.message.reply_text("❌ Hadis verisi alınamadı.")
+        if data["status"] != "OK":
+            await update.message.reply_text("❌ Hadis listesi alınamadı.")
             return
 
-        hadis = response["data"]
+        total = data["data"]["available"]
+        num = random.randint(1, total)
+
+        hadis_url = f"https://api.sutanlab.id/hadith/{kaynak}/{num}"
+        hadis_response = requests.get(hadis_url).json()
+
+        if hadis_response["status"] != "OK":
+            await update.message.reply_text("❌ Hadis getirilemedi.")
+            return
+
+        hadis = hadis_response["data"]
         metin = hadis.get("arab") or hadis.get("id") or "Hadis metni yok."
         kaynak_bilgi = f"{hadis['name']}, No: {hadis['number']}"
 
         await update.message.reply_text(f"📜 \"{metin}\"\n\n📚 {kaynak_bilgi}")
     except Exception as e:
-        print("Hata:", e)
-        await update.message.reply_text("⚠️ Bir hata oluştu, lütfen daha sonra tekrar deneyin.")
+        print("Hadis hatası:", e)
+        await update.message.reply_text("⚠️ Hadis verisi alınırken hata oluştu.")
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.type in ["group", "supergroup"]:
-        save_group(update.effective_chat.id)
+# /ara komutu
+async def ara(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("❓ Lütfen bir ayet veya sure ismi yazınız.")
+        return
 
-def start_bot():
-    app = Application.builder().token(TOKEN).build()
+    query = " ".join(context.args)
+    search_url = f"https://api.alquran.cloud/v1/search/{query}/all/tr.duz"
+
+    try:
+        response = requests.get(search_url).json()
+        if response["status"] == "OK" and response["data"]["count"] > 0:
+            results = response["data"]["matches"][:3]
+            msg = ""
+            for r in results:
+                surah = r["surah"]["name"]
+                number = r["numberInSurah"]
+                text = r["text"]
+                msg += f"📖 *{surah}* {number}. Ayet\n{text}\n\n"
+            await update.message.reply_text(msg, parse_mode="Markdown")
+        else:
+            await update.message.reply_text("❌ Uygun sonuç bulunamadı.")
+    except Exception as e:
+        print("Arama hatası:", e)
+        await update.message.reply_text("⚠️ Arama sırasında hata oluştu.")
+
+# Ana çalıştırıcı
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("ayet", ayet))
-    app.add_handler(CommandHandler("ara", ara))
     app.add_handler(CommandHandler("hadis", hadis))
-    app.add_handler(MessageHandler(filters.ALL, handle_message))
+    app.add_handler(CommandHandler("ara", ara))
 
+    print("🤖 Bot başlatılıyor...")
     app.run_polling()
 
-threading.Thread(target=start_scheduler).start()
-start_bot()
+if __name__ == "__main__":
+    main()
