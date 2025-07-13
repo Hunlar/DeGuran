@@ -17,7 +17,6 @@ GROUPS_FILE = "groups.json"
 
 bot = Bot(token=TOKEN)
 
-# Grup ID'si kaydet
 def save_group(chat_id):
     try:
         with open(GROUPS_FILE, "r", encoding="utf-8") as f:
@@ -30,7 +29,6 @@ def save_group(chat_id):
         with open(GROUPS_FILE, "w", encoding="utf-8") as f:
             json.dump(groups, f, ensure_ascii=False)
 
-# Ayet çek
 def get_random_ayah():
     ayah_number = random.randint(1, 6236)
     arabic_url = f"https://api.alquran.cloud/v1/ayah/{ayah_number}"
@@ -47,15 +45,6 @@ def get_random_ayah():
         return f"📖 *{surah} Suresi {num}. Ayet*\n\n🔹 _{arabic}_\n\n💬 {turkish}"
     return "⚠️ Ayet alınamadı."
 
-# Hadisleri JSON'dan yükle
-def load_hadisler():
-    try:
-        with open("hadisler.json", "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return []
-
-# Tüm gruplara ayet gönder
 def send_to_all_groups():
     try:
         with open(GROUPS_FILE, "r", encoding="utf-8") as f:
@@ -70,14 +59,12 @@ def send_to_all_groups():
         except Exception as e:
             print(f"⚠️ Hata: {e} - {chat_id}")
 
-# Saat başı gönderim için zamanlayıcı
 def start_scheduler():
     schedule.every().hour.at(":00").do(send_to_all_groups)
     while True:
         schedule.run_pending()
         time.sleep(1)
 
-# /start komutu
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ayasofya_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Hagia_Sophia_Mars_2020_img1.jpg/640px-Hagia_Sophia_Mars_2020_img1.jpg"
     keyboard = [
@@ -94,12 +81,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-# /ayet komutu
 async def ayet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = get_random_ayah()
     await update.message.reply_text(message, parse_mode="Markdown")
 
-# /ara komutu
 async def ara(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) == 0:
         await update.message.reply_text("🔎 Kullanım: /ara kelime")
@@ -113,7 +98,7 @@ async def ara(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Uygun sonuç bulunamadı.")
         return
 
-    results = response["data"]["matches"][:3]  # İlk 3 sonucu göster
+    results = response["data"]["matches"][:3]
     reply = f"🔍 *{query}* için bulunan ayetler:\n\n"
     for match in results:
         surah = match["surah"]["name"]
@@ -123,21 +108,33 @@ async def ara(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(reply.strip(), parse_mode="Markdown")
 
-# /hadis komutu
+# ✅ Ali Hadis API'den rastgele hadis
 async def hadis(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    hadisler = load_hadisler()
-    if not hadisler:
-        await update.message.reply_text("⚠️ Hadis verisi bulunamadı.")
-        return
-    hadis = random.choice(hadisler)
-    await update.message.reply_text(f"📜 \"{hadis['metin']}\"\n\n📚 {hadis['kaynak']}")
+    try:
+        kaynak = "abu-dawud"
+        max_num = 500
+        num = random.randint(1, max_num)
 
-# Grup mesajı gelince grup ID'sini kaydet
+        url = f"https://api.sutanlab.id/hadith/{kaynak}/{num}"
+        response = requests.get(url).json()
+
+        if response["status"] != "OK":
+            await update.message.reply_text("❌ Hadis verisi alınamadı.")
+            return
+
+        hadis = response["data"]
+        metin = hadis.get("arab") or hadis.get("id") or "Hadis metni yok."
+        kaynak_bilgi = f"{hadis['name']}, No: {hadis['number']}"
+
+        await update.message.reply_text(f"📜 \"{metin}\"\n\n📚 {kaynak_bilgi}")
+    except Exception as e:
+        print("Hata:", e)
+        await update.message.reply_text("⚠️ Bir hata oluştu, lütfen daha sonra tekrar deneyin.")
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type in ["group", "supergroup"]:
         save_group(update.effective_chat.id)
 
-# Telegram botunu başlat
 def start_bot():
     app = Application.builder().token(TOKEN).build()
 
@@ -149,6 +146,5 @@ def start_bot():
 
     app.run_polling()
 
-# Scheduler ve botu başlat
 threading.Thread(target=start_scheduler).start()
 start_bot()
