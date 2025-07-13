@@ -8,7 +8,7 @@ import threading
 from telegram import Update, Bot
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 
-# Ortam değişkenleri
+# Ortam değişkeni
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GROUPS_FILE = "groups.json"
 
@@ -45,7 +45,7 @@ def get_random_ayah():
         return f"📖 *{surah} Suresi {num}. Ayet*\n\n🔹 _{arabic}_\n\n💬 {turkish}"
     return "⚠️ Ayet alınamadı."
 
-# Gruplara gönder
+# Tüm gruplara gönder
 def send_to_all_groups():
     try:
         with open(GROUPS_FILE, "r") as f:
@@ -60,19 +60,19 @@ def send_to_all_groups():
         except Exception as e:
             print(f"Hata: {e} - {chat_id}")
 
-# Zamanlayıcı
+# Zamanlayıcı başlat
 def start_scheduler():
     schedule.every().hour.at(":00").do(send_to_all_groups)
     while True:
         schedule.run_pending()
         time.sleep(1)
 
-# Gruba katılınca ID kaydet
+# Grup mesajı gelirse kaydet
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type in ["group", "supergroup"]:
         save_group(update.effective_chat.id)
 
-# Telegram dinleyici
+# Telegram listener başlat
 def start_telegram_listener():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(MessageHandler(filters.ALL, handle_message))
